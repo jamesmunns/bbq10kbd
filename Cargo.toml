@@ -1,0 +1,16 @@
+[package]
+name = "bbq10kbd"
+version = "0.1.0"
+description = "An Embedded-HAL driver for @arturo182's bbq10kbd PMOD"
+repository = "https://github.com/jamesmunns/bbq10kbd"
+authors = ["James Munns <james.munns@ferrous-systems.com>"]
+edition = "2018"
+readme = "README.md"
+categories = [
+    "embedded",
+    "no-std",
+]
+license = "MIT OR Apache-2.0"
+
+[dependencies]
+embedded-hal = "0.2.3"
