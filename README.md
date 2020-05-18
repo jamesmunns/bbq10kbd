@@ -2,6 +2,10 @@
 
 [![Documentation](https://docs.rs/bbq10kbd/badge.svg)](https://docs.rs/bbq10kbd)
 
+An embedded-hal crate for [@arturo182](https://twitter.com/arturo182)'s [BlackBerry Q10 PMOD Keyboard](https://www.tindie.com/products/arturo182/bb-q10-keyboard-pmod/)
+
+Written on James' [Office Hours Stream](https://youtu.be/GQ0uzTIx9gY)
+
 # License
 
 Licensed under either of
