@@ -1,13 +1,21 @@
 //! An embedded-hal crate for @arturo182's BlackBerry Q10 PMOD Keyboard
 //!
 //! Written on James' [Office Hours Stream](https://youtu.be/GQ0uzTIx9gY)
+//!
 
+// Developer's note:
+//
+// Interface for this keyboard
+// To read the FW version register
+//
+// 1. WRITE (ADDRESS) 0x01
+// 2. READ (ADDRESS) (read 1 byte)
 
 #![no_std]
 
 use embedded_hal::blocking::i2c::{Read, Write};
 
-// DEFAULT
+// DEFAULT ADDRESS, not currently changeable
 const KBD_ADDR: u8 = 0x1F;
 
 /// The Error type for this crate
@@ -95,17 +103,19 @@ impl<I2C> Bbq10Kbd<I2C>
 where
     I2C: Read + Write
 {
-    /// Create a new
+    /// Create a new BBQ10 Keyboard instance
     pub fn new(i2c: I2C) -> Self {
         Self {
             i2c
         }
     }
 
+    /// Consume self, returning the inner I2C device
     pub fn release(self) -> I2C {
         self.i2c
     }
 
+    /// Get the version reported by the keyboard's firmware
     pub fn get_version(&mut self) -> Result<Version> {
         const VERSION_REGISTER: u8 = 0x01;
         let mut buf = [0u8; 1];
@@ -130,6 +140,7 @@ where
         })
     }
 
+    /// Obtain a single fifo item from the keyboard's firmware
     pub fn get_fifo_key_raw(&mut self) -> Result<KeyRaw> {
         const FIFO_REGISTER: u8 = 0x09;
         let mut buf = [0u8; 2];
@@ -154,6 +165,7 @@ where
         })
     }
 
+    /// Get the current level of backlight. All u8 values are valid
     pub fn get_backlight(&mut self) -> Result<u8> {
         const BACKLIGHT_REGISTER_READ: u8 = 0x05;
         let mut buf = [0u8; 1];
@@ -173,6 +185,7 @@ where
         Ok(buf[0])
     }
 
+    /// Set the current level of backlight. All u8 values are valid
     pub fn set_backlight(&mut self, level: u8) -> Result<()> {
         const BACKLIGHT_REGISTER_WRITE: u8 = 0x85;
         let mut buf = [0u8; 2];
@@ -201,6 +214,7 @@ where
             .map_err(|_| Error::I2c)
     }
 
+    /// Get the reported status of the keyboard
     pub fn get_key_status(&mut self) -> Result<KeyStatus> {
         const KEY_STATUS_REGISTER: u8 = 0x04;
         let mut buf = [0u8; 1];
@@ -255,10 +269,3 @@ where
     }
 
 }
-
-
-// Interface for this keyboard
-// To read the FW version register
-//
-// 1. WRITE (ADDRESS) 0x01
-// 2. READ (ADDRESS) (read 1 byte)
