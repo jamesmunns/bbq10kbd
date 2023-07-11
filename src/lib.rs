@@ -15,6 +15,11 @@
 
 use embedded_hal::blocking::i2c::{Read, Write};
 
+#[cfg(feature = "embedded-hal-async")]
+mod r#async;
+#[cfg(feature = "embedded-hal-async")]
+pub use r#async::AsyncBbq10Kbd;
+
 // DEFAULT ADDRESS, not currently changeable
 const KBD_ADDR: u8 = 0x1F;
 
@@ -31,9 +36,9 @@ pub type Result<T> = core::result::Result<T, Error>;
 /// A struct representing our BlackBerry Q10 PMOD Keyboard
 pub struct Bbq10Kbd<I2C>
 where
-    I2C: Read + Write
+    I2C: Read + Write,
 {
-    i2c: I2C
+    i2c: I2C,
 }
 
 /// The version identifier of our keyboard's firmware
@@ -94,20 +99,29 @@ pub enum FifoCount {
 /// The current key status register reported by the keyboard firmware
 #[derive(Debug)]
 pub struct KeyStatus {
-    num_lock: NumLockState,
-    caps_lock: CapsLockState,
-    fifo_count: FifoCount,
+    pub num_lock: NumLockState,
+    pub caps_lock: CapsLockState,
+    pub fifo_count: FifoCount,
+}
+
+pub(crate) mod register {
+    pub(crate) const WRITE: u8 = 0x80;
+
+    pub(crate) const VERSION: u8 = 0x01;
+
+    pub(crate) const KEY_STATUS: u8 = 0x04;
+    pub(crate) const BACKLIGHT: u8 = 0x05;
+    pub(crate) const RESET: u8 = 0x08;
+    pub(crate) const FIFO: u8 = 0x09;
 }
 
 impl<I2C> Bbq10Kbd<I2C>
 where
-    I2C: Read + Write
+    I2C: Read + Write,
 {
     /// Create a new BBQ10 Keyboard instance
     pub fn new(i2c: I2C) -> Self {
-        Self {
-            i2c
-        }
+        Self { i2c }
     }
 
     /// Consume self, returning the inner I2C device
@@ -117,35 +131,26 @@ where
 
     /// Get the version reported by the keyboard's firmware
     pub fn get_version(&mut self) -> Result<Version> {
-        const VERSION_REGISTER: u8 = 0x01;
         let mut buf = [0u8; 1];
 
-        buf[0] = VERSION_REGISTER;
+        buf[0] = register::VERSION;
 
-        self.i2c
-            .write(KBD_ADDR, &buf)
-            .map_err(|_| Error::I2c)?;
+        self.i2c.write(KBD_ADDR, &buf).map_err(|_| Error::I2c)?;
 
         buf[0] = 0;
 
-        self.i2c
-            .read(KBD_ADDR, &mut buf)
-            .map_err(|_| Error::I2c)?;
+        self.i2c.read(KBD_ADDR, &mut buf).map_err(|_| Error::I2c)?;
 
         let val = buf[0];
 
-        Ok(Version {
-            major: (val & 0xF0) >> 4,
-            minor: (val & 0x0F),
-        })
+        Ok(Version::from_byte(val))
     }
 
     /// Obtain a single fifo item from the keyboard's firmware
     pub fn get_fifo_key_raw(&mut self) -> Result<KeyRaw> {
-        const FIFO_REGISTER: u8 = 0x09;
         let mut buf = [0u8; 2];
 
-        buf[0] = FIFO_REGISTER;
+        buf[0] = register::FIFO;
 
         self.i2c
             .write(KBD_ADDR, &buf[..1])
@@ -153,49 +158,34 @@ where
 
         buf[0] = 0;
 
-        self.i2c
-            .read(KBD_ADDR, &mut buf)
-            .map_err(|_| Error::I2c)?;
+        self.i2c.read(KBD_ADDR, &mut buf).map_err(|_| Error::I2c)?;
 
-        Ok(match buf {
-            [1, n] => KeyRaw::Pressed(n),
-            [2, n] => KeyRaw::Held(n),
-            [3, n] => KeyRaw::Released(n),
-            [_, _] => KeyRaw::Invalid,
-        })
+        Ok(KeyRaw::from_bytes(buf))
     }
 
     /// Get the current level of backlight. All u8 values are valid
     pub fn get_backlight(&mut self) -> Result<u8> {
-        const BACKLIGHT_REGISTER_READ: u8 = 0x05;
         let mut buf = [0u8; 1];
 
-        buf[0] = BACKLIGHT_REGISTER_READ;
+        buf[0] = register::BACKLIGHT;
 
-        self.i2c
-            .write(KBD_ADDR, &buf)
-            .map_err(|_| Error::I2c)?;
+        self.i2c.write(KBD_ADDR, &buf).map_err(|_| Error::I2c)?;
 
         buf[0] = 0;
 
-        self.i2c
-            .read(KBD_ADDR, &mut buf)
-            .map_err(|_| Error::I2c)?;
+        self.i2c.read(KBD_ADDR, &mut buf).map_err(|_| Error::I2c)?;
 
         Ok(buf[0])
     }
 
     /// Set the current level of backlight. All u8 values are valid
     pub fn set_backlight(&mut self, level: u8) -> Result<()> {
-        const BACKLIGHT_REGISTER_WRITE: u8 = 0x85;
         let mut buf = [0u8; 2];
 
-        buf[0] = BACKLIGHT_REGISTER_WRITE;
+        buf[0] = register::BACKLIGHT | register::WRITE;
         buf[1] = level;
 
-        self.i2c
-            .write(KBD_ADDR, &buf)
-            .map_err(|_| Error::I2c)
+        self.i2c.write(KBD_ADDR, &buf).map_err(|_| Error::I2c)
     }
 
     /// Reset the device via software
@@ -203,69 +193,78 @@ where
     /// WARNING: Device may take >= 10ms to reboot. It
     /// will not be responsive during this time
     pub fn sw_reset(&mut self) -> Result<()> {
-        const RESET_REGISTER: u8 = 0x08;
         let mut buf = [0u8; 1];
 
-        buf[0] = RESET_REGISTER;
+        buf[0] = register::RESET;
 
         // This is enough to reset the device
-        self.i2c
-            .write(KBD_ADDR, &buf)
-            .map_err(|_| Error::I2c)
+        self.i2c.write(KBD_ADDR, &buf).map_err(|_| Error::I2c)
     }
 
     /// Get the reported status of the keyboard
     pub fn get_key_status(&mut self) -> Result<KeyStatus> {
-        const KEY_STATUS_REGISTER: u8 = 0x04;
         let mut buf = [0u8; 1];
 
-        buf[0] = KEY_STATUS_REGISTER;
+        buf[0] = register::KEY_STATUS;
 
-        self.i2c
-            .write(KBD_ADDR, &buf)
-            .map_err(|_| Error::I2c)?;
+        self.i2c.write(KBD_ADDR, &buf).map_err(|_| Error::I2c)?;
 
         buf[0] = 0;
 
-        self.i2c
-            .read(KBD_ADDR, &mut buf)
-            .map_err(|_| Error::I2c)?;
+        self.i2c.read(KBD_ADDR, &mut buf).map_err(|_| Error::I2c)?;
 
-        let mut resp = buf[0];
+        Ok(KeyStatus::from_byte(buf[0]))
+    }
+}
 
-        let num_lock = if (resp & 0b0100_0000) != 0 {
+impl Version {
+    pub(crate) fn from_byte(byte: u8) -> Self {
+        Self {
+            major: (byte & 0xF0) >> 4,
+            minor: (byte & 0x0F),
+        }
+    }
+}
+
+impl KeyRaw {
+    pub(crate) fn from_bytes(buf: [u8; 2]) -> Self {
+        match buf {
+            [1, n] => Self::Pressed(n),
+            [2, n] => Self::Held(n),
+            [3, n] => Self::Released(n),
+            [_, _] => Self::Invalid,
+        }
+    }
+}
+
+impl KeyStatus {
+    pub(crate) fn from_byte(mut byte: u8) -> Self {
+        let num_lock = if (byte & 0b0100_0000) != 0 {
             NumLockState::On
         } else {
             NumLockState::Off
         };
-        resp = resp & 0b1011_1111;
+        byte = byte & 0b1011_1111;
 
-        let capslock = (resp & 0b0010_0000) != 0;
-        let fifo_ct = resp & 0b0001_1111;
+        let capslock = (byte & 0b0010_0000) != 0;
+        let fifo_ct = byte & 0b0001_1111;
 
-        Ok(match (capslock, fifo_ct) {
-            (true, 0) => {
-                KeyStatus {
-                    caps_lock: CapsLockState::Unknown,
-                    num_lock,
-                    fifo_count: FifoCount::EmptyOr32,
-                }
+        match (capslock, fifo_ct) {
+            (true, 0) => Self {
+                caps_lock: CapsLockState::Unknown,
+                num_lock,
+                fifo_count: FifoCount::EmptyOr32,
             },
-            (true, n) => {
-                KeyStatus {
-                    caps_lock: CapsLockState::On,
-                    num_lock,
-                    fifo_count: FifoCount::Known(n),
-                }
-            }
-            (false, n) => {
-                KeyStatus {
-                    caps_lock: CapsLockState::Off,
-                    num_lock,
-                    fifo_count: FifoCount::Known(n),
-                }
-            }
-        })
+            (true, n) => Self {
+                caps_lock: CapsLockState::On,
+                num_lock,
+                fifo_count: FifoCount::Known(n),
+            },
+            (false, n) => Self {
+                caps_lock: CapsLockState::Off,
+                num_lock,
+                fifo_count: FifoCount::Known(n),
+            },
+        }
     }
-
 }
