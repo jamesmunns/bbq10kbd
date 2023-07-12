@@ -44,12 +44,8 @@ where
     pub async fn get_fifo_key_raw(&mut self) -> Result<KeyRaw, I2C::Error> {
         let mut buf = [0u8; 2];
 
-        self.i2c
-            .transaction(
-                KBD_ADDR,
-                &mut [Write(&[register::FIFO]), Read(&mut buf[..])],
-            )
-            .await?;
+        self.i2c.write(KBD_ADDR, &[register::FIFO]).await?;
+        self.i2c.read(KBD_ADDR, &mut buf[..]).await?;
 
         Ok(KeyRaw::from_bytes(buf))
     }
@@ -95,13 +91,8 @@ where
     pub async fn get_key_status(&mut self) -> Result<KeyStatus, I2C::Error> {
         let mut buf = [0u8; 1];
 
-        self.i2c
-            .transaction(
-                KBD_ADDR,
-                &mut [Write(&[register::KEY_STATUS]), Read(&mut buf[..])],
-            )
-            .await?;
-
+        self.i2c.write(KBD_ADDR, &[register::KEY_STATUS]).await?;
+        self.i2c.read(KBD_ADDR, &mut buf).await?;
         Ok(KeyStatus::from_byte(buf[0]))
     }
 }
