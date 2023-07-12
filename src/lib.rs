@@ -49,7 +49,7 @@ pub struct Version {
 }
 
 /// A raw key event from the management FIFO
-#[derive(Debug)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum KeyRaw {
     Invalid,
     Pressed(u8),
@@ -61,7 +61,7 @@ pub enum KeyRaw {
 ///
 /// Numlock is enabled by pressing `alt` + `Left Shift`, and
 /// disabled by double clicking either Shift key
-#[derive(Debug)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum NumLockState {
     Off,
     On,
@@ -75,7 +75,7 @@ pub enum NumLockState {
 /// NOTE: Due to a firmware bug, the Fifo count may roll over
 /// into the CapsLock bit. In this case, an `Unknown` value will
 /// be returned.
-#[derive(Debug)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum CapsLockState {
     Off,
     On,
@@ -90,14 +90,15 @@ pub enum CapsLockState {
 /// into the CapsLock bit. In this case, an `EmptyOr32` value will
 /// be returned, and there are either zero or 32 elements in the
 /// fifo currently.
-#[derive(Debug)]
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum FifoCount {
     Known(u8),
     EmptyOr32,
 }
 
 /// The current key status register reported by the keyboard firmware
-#[derive(Debug)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct KeyStatus {
     pub num_lock: NumLockState,
     pub caps_lock: CapsLockState,
