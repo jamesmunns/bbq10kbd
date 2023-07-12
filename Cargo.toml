@@ -14,3 +14,4 @@ license = "MIT OR Apache-2.0"
 
 [dependencies]
 embedded-hal = "0.2.3"
+embedded-hal-async = { version = "0.2.0-alpha.2", optional = true }
